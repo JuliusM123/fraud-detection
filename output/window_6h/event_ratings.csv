@@ -1,0 +1,4 @@
+event,window_volume_usd,volume_percentile,volume_z,win_share_window,win_share_baseline,flagged_trades,flagged_wallets,wallets_suspicious_or_higher,conditions_met,rating
+iran_ceasefire,2576630.7112,100.0000,12.8399,0.4948,0.3048,907,381,3,3,highly suspicious
+maduro,120550.7694,100.0000,4.2448,0.4765,0.1673,25,16,2,3,highly suspicious
+tariff_pause,276.8436,9.0909,-0.3790,0.8887,0.9261,0,0,0,0,normal

@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Volume Charts</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --window: #f0efec;
+    --border: rgba(11, 11, 11, 0.10);
+    --winner: #2a78d6;
+    --loser: #eb6834;
+    --watch: #898781;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --window: #262624;
+      --border: rgba(255, 255, 255, 0.10);
+      --winner: #3987e5;
+      --loser: #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --window: #262624;
+    --border: rgba(255, 255, 255, 0.10);
+    --winner: #3987e5;
+    --loser: #d95926;
+  }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lede { color: var(--ink-2); font-size: 14px; margin: 0 0 24px; max-width: 760px; line-height: 1.45; }
+  figure.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 0 0 24px;
+  }
+  figure h2 { font-size: 17px; margin: 0; }
+  .caption { color: var(--ink-2); font-size: 13px; margin: 4px 0 12px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .key-rect { width: 10px; height: 10px; border-radius: 2px; }
+  .key-line { width: 14px; height: 2px; border-radius: 1px; }
+  .plot { position: relative; }
+  .plot svg { display: block; width: 100%; height: auto; }
+  .plot svg:focus { outline: none; }
+  .plot svg:focus-visible { outline: 2px solid var(--winner); outline-offset: 4px; border-radius: 4px; }
+  .tick { fill: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .note { fill: var(--ink-2); font-size: 11px; }
+  .mark { fill: var(--ink); font-size: 11px; }
+  .tooltip {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    min-width: 190px;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .tooltip .head { color: var(--ink-2); margin-bottom: 6px; }
+  .tooltip .row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .tooltip .val { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 64px; }
+  .tooltip .name { color: var(--ink-2); }
+  .actions { margin-top: 10px; }
+  button.toggle {
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  button.toggle:hover { background: var(--window); }
+  .table-wrap { display: none; max-height: 360px; overflow: auto; margin-top: 10px; }
+  .table-wrap.open { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; }
+  tr.in-window td { background: var(--window); }
+  h3.sub { font-size: 15px; margin: 28px 0 0; padding-top: 20px; border-top: 1px solid var(--grid); }
+  .key-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .rating { display: inline-flex; align-items: center; gap: 6px; }
+  .rating i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-label {
+    fill: var(--ink);
+    font-size: 11px;
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Betting activity before Trump announcements</h1>
+  <p class="lede">
+    Hourly taker volume on Polymarket for each event, 7 days before t0 and 12 hours after.
+    Hours are counted from t0. The shaded band is the detection window before t0. Hover or use the
+    arrow keys for values. All times are UTC.
+  </p>
+  <div id="charts"></div>
+  <figure class="card" id="wallets">
+    <h2>Wallets rated suspicious or higher</h2>
+    <p class="caption">
+      Suspicious: a flagged trade that is both large and placed less than 7 days after the wallet's first
+      trade, and at most 3 other markets. Highly suspicious adds wins in several other markets at low prices,
+      a flag in several events or a shared private funder. Profit assumes every position is held to resolution.
+    </p>
+  </figure>
+</main>
+
+<script id="chart-data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("chart-data").textContent);
+  const EVENTS = DATA.events;
+  const RATING_COLOR = { "watch": "var(--watch)", "suspicious": "var(--serious)", "highly suspicious": "var(--critical)" };
+  const RATING_ORDER = ["watch", "suspicious", "highly suspicious"];
+  const NS = "http://www.w3.org/2000/svg";
+  const HOUR = 3600e3;
+  const DAY = 24 * HOUR;
+
+  function svgEl(tag, attrs, parent) {
+    const node = document.createElementNS(NS, tag);
+    for (const key in attrs) node.setAttribute(key, attrs[key]);
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+  function htmlEl(tag, cls, text, parent) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+  function text(parent, x, y, value, cls, anchor) {
+    const node = svgEl("text", { x: x, y: y, class: cls, "text-anchor": anchor || "start" }, parent);
+    node.textContent = value;
+    return node;
+  }
+  function usd(v) {
+    const a = Math.abs(v);
+    if (a >= 1e6) return "$" + +(v / 1e6).toPrecision(3) + "M";
+    if (a >= 1e3) return "$" + +(v / 1e3).toPrecision(3) + "K";
+    return "$" + Math.round(v);
+  }
+  const dayFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+  const timeFmt = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
+  });
+  const clockFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" });
+
+  function niceStep(max, count) {
+    const raw = max / count;
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= raw) return m * pow;
+    return 10 * pow;
+  }
+
+  // Bar with a small rounded data end and a square base.
+  function barPath(x, top, bottom, w) {
+    const r = Math.min(2, w / 2, bottom - top);
+    return "M" + x + "," + bottom + "V" + (top + r) + "Q" + x + "," + top + " " + (x + r) + "," + top +
+      "H" + (x + w - r) + "Q" + (x + w) + "," + top + " " + (x + w) + "," + (top + r) + "V" + bottom + "Z";
+  }
+
+  function buildCard(ev) {
+    const fig = htmlEl("figure", "card", null, document.getElementById("charts"));
+    htmlEl("h2", null, ev.name, fig);
+    htmlEl("p", "caption", ev.question + "  Winner " + ev.winner + ".", fig);
+    const legend = htmlEl("div", "legend", null, fig);
+    const items = [
+      ["rect", "var(--winner)", "on " + ev.winner + " (buy " + ev.winner + " or sell " + ev.loser + ")"],
+      ["rect", "var(--loser)", "on " + ev.loser + " (buy " + ev.loser + " or sell " + ev.winner + ")"],
+      ["line", "var(--winner)", ev.winner + " price"],
+      ["rect", "var(--window)", ev.window_hours + " h window before t0"],
+    ];
+    if (ev.post_time != null) items.push(["line", "var(--muted)", "post " + clockFmt.format(ev.post_time) + " UTC"]);
+    for (const [kind, color, label] of items) {
+      const item = htmlEl("span", null, null, legend);
+      const key = htmlEl("i", kind === "rect" ? "key-rect" : "key-line", null, item);
+      key.style.background = color;
+      if (color === "var(--window)") key.style.boxShadow = "inset 0 0 0 1px var(--axis)";
+      htmlEl("span", null, label, item);
+    }
+    const plot = htmlEl("div", "plot", null, fig);
+    const tip = htmlEl("div", "tooltip", null, plot);
+    const actions = htmlEl("div", "actions", null, fig);
+    const button = htmlEl("button", "toggle", "Show table", actions);
+    button.type = "button";
+    const wrap = htmlEl("div", "table-wrap", null, fig);
+    button.addEventListener("click", function () {
+      const open = wrap.classList.toggle("open");
+      button.textContent = open ? "Hide table" : "Show table";
+      if (open && !wrap.firstChild) buildTable(ev, wrap);
+    });
+    observeWidth(plot, function (state) { renderChart(ev, plot, tip, state); });
+    if (ev.flagged) buildFlagged(ev, fig);
+  }
+
+  // redraw only when the width changes, a new height alone must not trigger another draw
+  function observeWidth(plot, render) {
+    const state = { index: null, width: null };
+    new ResizeObserver(function () {
+      if (plot.clientWidth === state.width) return;
+      state.width = plot.clientWidth;
+      render(state);
+    }).observe(plot);
+  }
+
+  function shortAddress(a) { return a.slice(0, 6) + "…" + a.slice(-4); }
+  function walletName(p) { return p.handle || shortAddress(p.address); }
+  function age(hours) {
+    if (hours == null) return "unknown";
+    return hours < 48 ? hours.toFixed(1) + " h" : (hours / 24).toFixed(1) + " days";
+  }
+  function ratingCell(parent, rating) {
+    const span = htmlEl("span", "rating", null, parent);
+    htmlEl("i", null, null, span).style.background = RATING_COLOR[rating];
+    htmlEl("span", null, rating, span);
+  }
+
+  function buildFlagged(ev, fig) {
+    htmlEl("h3", "sub", "Flagged trades in the detection window", fig);
+    const wallets = {};
+    for (const p of ev.flagged) wallets[p.address] = p.rating;
+    const counts = {};
+    for (const a in wallets) counts[wallets[a]] = (counts[wallets[a]] || 0) + 1;
+    htmlEl("p", "caption", ev.flagged.length + " flagged trades from " + Object.keys(wallets).length +
+      " wallets. Each dot is one trade, placed by hours before t0 and entry price. Dot size shows the bet in USD," +
+      " color shows the rating of the wallet.", fig);
+    if (!ev.flagged.length) return;
+    const legend = htmlEl("div", "legend", null, fig);
+    for (const r of RATING_ORDER) {
+      const item = htmlEl("span", null, null, legend);
+      htmlEl("i", "key-dot", null, item).style.background = RATING_COLOR[r];
+      const n = counts[r] || 0;
+      htmlEl("span", null, r + " (" + n + (n === 1 ? " wallet)" : " wallets)"), item);
+    }
+    const plot = htmlEl("div", "plot", null, fig);
+    const tip = htmlEl("div", "tooltip", null, plot);
+    const actions = htmlEl("div", "actions", null, fig);
+    const button = htmlEl("button", "toggle", "Show flagged trades", actions);
+    button.type = "button";
+    const wrap = htmlEl("div", "table-wrap", null, fig);
+    button.addEventListener("click", function () {
+      const open = wrap.classList.toggle("open");
+      button.textContent = open ? "Hide flagged trades" : "Show flagged trades";
+      if (open && !wrap.firstChild) buildFlaggedTable(ev, wrap);
+    });
+    observeWidth(plot, function (state) { renderScatter(ev, plot, tip, state); });
+  }
+
+  function buildFlaggedTable(ev, wrap) {
+    const rows = ev.flagged.slice().sort(function (a, b) {
+      return RATING_ORDER.indexOf(b.rating) - RATING_ORDER.indexOf(a.rating) || b.usd - a.usd;
+    });
+    const table = htmlEl("table", null, null, wrap);
+    const head = htmlEl("tr", null, null, htmlEl("thead", null, null, table));
+    for (const h of ["Wallet", "Rating", "Time (UTC)", "Trade", "Entry price", "Bet", "Wallet age", "Other markets"]) htmlEl("th", null, h, head);
+    const body = htmlEl("tbody", null, null, table);
+    for (const p of rows) {
+      const row = htmlEl("tr", null, null, body);
+      htmlEl("td", null, walletName(p), row);
+      ratingCell(htmlEl("td", null, null, row), p.rating);
+      htmlEl("td", null, timeFmt.format(p.t), row);
+      htmlEl("td", null, p.side + " " + p.outcome, row);
+      htmlEl("td", null, p.price.toFixed(3), row);
+      htmlEl("td", null, usd(p.usd), row);
+      htmlEl("td", null, age(p.age_h), row);
+      htmlEl("td", null, p.other_markets == null ? "many" : String(p.other_markets), row);
+    }
+  }
+
+  function renderScatter(ev, plot, tip, state) {
+    const old = plot.querySelector("svg");
+    if (old) old.remove();
+    const W = Math.max(320, plot.clientWidth);
+    const m = { l: 52, r: 8, t: 14, b: 30 };
+    const plotH = W < 600 ? 190 : 260;
+    const H = m.t + plotH + m.b;
+    const svg = svgEl("svg", {
+      viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", tabindex: "0",
+      "aria-label": "Flagged trades of " + ev.name + " by time before t0 and entry price. Use the arrow keys to step through them.",
+    });
+    plot.insertBefore(svg, tip);
+    const x0 = m.l, x1 = W - m.r, yTop = m.t, yBot = m.t + plotH;
+    const x = function (t) { return x0 + (t - ev.window_start) / (ev.t0 - ev.window_start) * (x1 - x0); };
+    // the price axis ends just above the entry price limit unless a flagged trade was dearer
+    const maxPrice = Math.max.apply(null, ev.flagged.map(function (p) { return p.price; }));
+    const yMax = Math.min(1, Math.max(ev.max_entry_price + 0.1, Math.ceil(maxPrice * 10) / 10 + 0.1));
+    const y = function (p) { return yBot - p / yMax * plotH; };
+
+    const yStep = W < 600 ? 0.2 : 0.1;
+    for (let k = 0; k * yStep <= yMax + 1e-9; k++) {
+      const p = +(k * yStep).toFixed(2);
+      svgEl("line", { x1: x0, x2: x1, y1: y(p), y2: y(p), stroke: p === ev.max_entry_price ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, svg);
+      text(svg, x0 - 8, y(p) + 4, p.toFixed(2), "tick", "end");
+    }
+    text(svg, x1 - 2, y(ev.max_entry_price) - 5, "entry price limit " + ev.max_entry_price, "note", "end");
+    svgEl("line", { x1: x0, x2: x1, y1: yBot, y2: yBot, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+    const tickEvery = ev.window_hours > 6 ? 2 : 1;
+    for (let k = 0; k <= ev.window_hours; k += tickEvery) {
+      const tx = x(ev.t0 - k * HOUR);
+      svgEl("line", { x1: tx, x2: tx, y1: yBot, y2: yBot + 4, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+      text(svg, tx, yBot + 17, k === 0 ? "t0" : "−" + k + " h", "tick", k === 0 ? "end" : "middle");
+    }
+    svgEl("line", { x1: x(ev.t0), x2: x(ev.t0), y1: yTop, y2: yBot, stroke: "var(--ink)", "stroke-width": 1 }, svg);
+
+    const maxUsd = Math.max.apply(null, ev.flagged.map(function (p) { return p.usd; }));
+    const radius = function (v) { return 3 + 11 * Math.sqrt(v / maxUsd); };
+    const points = ev.flagged.map(function (p) {
+      return { p: p, cx: x(p.t), cy: y(Math.min(yMax, p.price)), r: radius(p.usd) };
+    });
+    // watch first, the rated wallets on top
+    const drawOrder = points.slice().sort(function (a, b) {
+      return RATING_ORDER.indexOf(a.p.rating) - RATING_ORDER.indexOf(b.p.rating) || b.r - a.r;
+    });
+    for (const d of drawOrder) {
+      svgEl("circle", {
+        cx: d.cx, cy: d.cy, r: d.r, fill: RATING_COLOR[d.p.rating],
+        "fill-opacity": d.p.rating === "watch" ? 0.45 : 1, stroke: "var(--surface)", "stroke-width": 1.5,
+      }, svg);
+    }
+    // direct label at the largest trade of every rated wallet, nudged when labels collide
+    const best = {};
+    for (const d of points) {
+      if (d.p.rating === "watch") continue;
+      if (!best[d.p.address] || d.p.usd > best[d.p.address].p.usd) best[d.p.address] = d;
+    }
+    const placed = [];
+    for (const a in best) {
+      const d = best[a];
+      const label = walletName(d.p);
+      const width = label.length * 6.2;
+      const right = d.cx + d.r + 4 + width < x1;
+      let lx = right ? d.cx + d.r + 4 : d.cx - d.r - 4 - width;
+      let ly = d.cy + 4;
+      for (let tries = 0; tries < 6; tries++) {
+        const clash = placed.some(function (b) { return lx < b.x + b.w && lx + width > b.x && Math.abs(ly - b.y) < 13; });
+        if (!clash) break;
+        ly += tries % 2 === 0 ? 14 * (tries + 1) : -14 * (tries + 1);
+      }
+      placed.push({ x: lx, y: ly, w: width });
+      text(svg, right ? lx : lx + width, ly, label, "dot-label", right ? "start" : "end");
+    }
+
+    const ring = svgEl("circle", { r: 0, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5, visibility: "hidden" }, svg);
+    const byTime = points.slice().sort(function (a, b) { return a.p.t - b.p.t; });
+    function show(i) {
+      state.index = i;
+      const d = byTime[i], p = d.p;
+      ring.setAttribute("cx", d.cx);
+      ring.setAttribute("cy", d.cy);
+      ring.setAttribute("r", d.r + 3);
+      ring.setAttribute("visibility", "visible");
+      tip.replaceChildren();
+      htmlEl("div", "head", walletName(p), tip);
+      const rows = [
+        [RATING_COLOR[p.rating], p.rating, "rating"],
+        [null, usd(p.usd), p.side + " " + p.outcome + " at " + p.price.toFixed(3)],
+        [null, ((ev.t0 - p.t) / HOUR).toFixed(1) + " h", "before t0 (" + clockFmt.format(p.t) + " UTC)"],
+        [null, age(p.age_h), "since first Polymarket trade"],
+        [null, p.other_markets == null ? "many" : String(p.other_markets), "other markets"],
+      ];
+      for (const [color, value, name] of rows) {
+        const row = htmlEl("div", "row", null, tip);
+        const key = htmlEl("i", "key-line", null, row);
+        key.style.background = color || "transparent";
+        htmlEl("span", "val", value, row);
+        htmlEl("span", "name", name, row);
+      }
+      tip.style.display = "block";
+      const scale = plot.clientWidth / W;
+      let left = (d.cx + d.r) * scale + 10;
+      if (left + tip.offsetWidth > plot.clientWidth) left = (d.cx - d.r) * scale - tip.offsetWidth - 10;
+      tip.style.left = Math.max(0, left) + "px";
+      tip.style.top = Math.max(0, d.cy * scale - 20) + "px";
+    }
+    function hide() {
+      ring.setAttribute("visibility", "hidden");
+      tip.style.display = "none";
+    }
+    // the nearest dot within 24 px answers the pointer, so small dots are easy to hit
+    svg.addEventListener("pointermove", function (e) {
+      const box = svg.getBoundingClientRect();
+      const px = (e.clientX - box.left) * W / box.width, py = (e.clientY - box.top) * H / box.height;
+      let bestI = -1, bestD = 24;
+      byTime.forEach(function (d, i) {
+        const dist = Math.hypot(d.cx - px, d.cy - py) - d.r;
+        if (dist < bestD) { bestD = dist; bestI = i; }
+      });
+      if (bestI >= 0) show(bestI); else hide();
+    });
+    svg.addEventListener("pointerleave", hide);
+    svg.addEventListener("focus", function () { show(state.index != null ? state.index : byTime.length - 1); });
+    svg.addEventListener("blur", hide);
+    svg.addEventListener("keydown", function (e) {
+      const stepBy = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+      if (stepBy == null) return;
+      e.preventDefault();
+      show(Math.max(0, Math.min(byTime.length - 1, (state.index == null ? byTime.length - 1 : state.index) + stepBy)));
+    });
+  }
+
+  function buildWalletTable() {
+    const card = document.getElementById("wallets");
+    if (!DATA.wallets || !DATA.wallets.length) { card.remove(); return; }
+    const wrap = htmlEl("div", "table-wrap open", null, card);
+    const table = htmlEl("table", null, null, wrap);
+    const head = htmlEl("tr", null, null, htmlEl("thead", null, null, table));
+    for (const h of ["Wallet", "Event", "Rating", "First trade (UTC)", "Age at flagged bet", "Bet on event", "Entry price", "Profit", "Other markets", "Won there"]) htmlEl("th", null, h, head);
+    const body = htmlEl("tbody", null, null, table);
+    for (const w of DATA.wallets) {
+      const row = htmlEl("tr", null, null, body);
+      const cell = htmlEl("td", null, null, row);
+      htmlEl("div", null, walletName(w), cell);
+      htmlEl("div", "mono", w.address, cell);
+      htmlEl("td", null, w.event_names, row);
+      ratingCell(htmlEl("td", null, null, row), w.rating);
+      htmlEl("td", null, timeFmt.format(w.first_trade), row);
+      htmlEl("td", null, age(w.age_h), row);
+      htmlEl("td", null, usd(w.bet_usd), row);
+      htmlEl("td", null, w.entry_price == null ? "n/a" : w.entry_price.toFixed(3), row);
+      htmlEl("td", null, (w.pnl_usd < 0 ? "−" : "") + usd(Math.abs(w.pnl_usd)), row);
+      htmlEl("td", null, String(w.other_markets), row);
+      htmlEl("td", null, String(w.other_won), row);
+    }
+  }
+
+  function buildTable(ev, wrap) {
+    const table = htmlEl("table", null, null, wrap);
+    const head = htmlEl("tr", null, null, htmlEl("thead", null, null, table));
+    for (const h of ["Hour from (UTC)", "On " + ev.winner, "On " + ev.loser, ev.winner + " price", "Trades"]) htmlEl("th", null, h, head);
+    const body = htmlEl("tbody", null, null, table);
+    ev.hours.forEach(function (t, i) {
+      const row = htmlEl("tr", t >= ev.window_start && t < ev.t0 ? "in-window" : null, null, body);
+      htmlEl("td", null, timeFmt.format(t), row);
+      htmlEl("td", null, usd(ev.win[i]), row);
+      htmlEl("td", null, usd(ev.lose[i]), row);
+      htmlEl("td", null, ev.price[i] == null ? "no trade" : ev.price[i].toFixed(3), row);
+      htmlEl("td", null, String(ev.trades[i]), row);
+    });
+  }
+
+  function renderChart(ev, plot, tip, state) {
+    const old = plot.querySelector("svg");
+    if (old) old.remove();
+    const W = Math.max(320, plot.clientWidth);
+    const m = { l: 52, r: 8, t: 22, b: 24 };
+    const priceH = W < 600 ? 90 : 120;
+    const volH = W < 600 ? 170 : 230;
+    const gap = 18;
+    const H = m.t + priceH + gap + volH + m.b;
+    const svg = svgEl("svg", {
+      viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", tabindex: "0",
+      "aria-label": ev.name + ". Hourly taker volume by side and " + ev.winner + " price. Use the arrow keys to read single hours.",
+    });
+    plot.insertBefore(svg, tip);
+
+    const x0 = m.l, x1 = W - m.r;
+    const x = function (t) { return x0 + (t - ev.start) / (ev.end - ev.start) * (x1 - x0); };
+    const pTop = m.t, pBot = m.t + priceH, vTop = pBot + gap, vBot = vTop + volH;
+    const yP = function (p) { return pBot - p * priceH; };
+
+    // the volume scale follows the hours before t0, taller bars after t0 are cut and the peak is written out
+    const totals = ev.win.map(function (w, i) { return w + ev.lose[i]; });
+    let preMax = 0, peak = 0, peakAt = null;
+    totals.forEach(function (v, i) {
+      if (ev.hours[i] < ev.t0) preMax = Math.max(preMax, v);
+      if (v > peak) { peak = v; peakAt = ev.hours[i]; }
+    });
+    const cut = preMax > 0 && peak > 1.5 * 1.15 * preMax;
+    const target = cut ? 1.15 * preMax : peak * 1.05 || 1;
+    const step = niceStep(target, W < 600 ? 3 : 5);
+    const vMax = cut ? target : Math.ceil(target / step) * step;
+    const yV = function (v) { return vBot - Math.min(v, vMax) / vMax * volH; };
+
+    for (const [a, b] of [[pTop, pBot], [vTop, vBot]]) {
+      svgEl("rect", { x: x(ev.window_start), y: a, width: x(ev.t0) - x(ev.window_start), height: b - a, fill: "var(--window)" }, svg);
+    }
+    for (const p of [0, 0.25, 0.5, 0.75, 1]) {
+      svgEl("line", { x1: x0, x2: x1, y1: yP(p), y2: yP(p), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+      text(svg, x0 - 8, yP(p) + 4, p.toFixed(2), "tick", "end");
+    }
+    for (let v = 0; v <= vMax + 1e-9; v += step) {
+      svgEl("line", { x1: x0, x2: x1, y1: yV(v), y2: yV(v), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+      text(svg, x0 - 8, yV(v) + 4, usd(v), "tick", "end");
+    }
+    svgEl("line", { x1: x0, x2: x1, y1: pBot, y2: pBot, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+    svgEl("line", { x1: x0, x2: x1, y1: vBot, y2: vBot, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+    const every = W < 600 ? 2 : 1;
+    let k = 0;
+    for (let t = Math.ceil(ev.start / DAY) * DAY; t <= ev.end; t += DAY, k++) {
+      svgEl("line", { x1: x(t), x2: x(t), y1: vBot, y2: vBot + 4, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+      if (k % every === 0) text(svg, x(t), vBot + 17, dayFmt.format(t), "tick", "middle");
+    }
+
+    const slot = x(ev.start + HOUR) - x(ev.start);
+    const bw = Math.max(1, slot - 2);
+    ev.hours.forEach(function (t, i) {
+      const left = x(t) + (slot - bw) / 2;
+      const w = ev.win[i], l = ev.lose[i];
+      if (w > 0) svgEl("path", { d: barPath(left, yV(w), vBot, bw), fill: "var(--winner)" }, svg);
+      if (l > 0) {
+        const bottom = w > 0 ? yV(w) - 2 : vBot;
+        const top = yV(w + l);
+        if (bottom - top > 0.5) svgEl("path", { d: barPath(left, top, bottom, bw), fill: "var(--loser)" }, svg);
+      }
+    });
+    if (cut) {
+      text(svg, x(ev.window_start) - 6, vTop + 12,
+        "bars after t0 cut, peak " + usd(peak) + " in hour from " + clockFmt.format(peakAt), "note", "end");
+    }
+
+    // price line, hours without a trade keep the last traded price
+    let last = null, d = "";
+    ev.hours.forEach(function (t, i) {
+      if (ev.price[i] != null) last = ev.price[i];
+      if (last != null) d += (d ? "L" : "M") + x(t + HOUR / 2).toFixed(1) + "," + yP(last).toFixed(1);
+    });
+    svgEl("path", { d: d, fill: "none", stroke: "var(--winner)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+
+    svgEl("line", { x1: x(ev.t0), x2: x(ev.t0), y1: pTop - 6, y2: vBot, stroke: "var(--ink)", "stroke-width": 1 }, svg);
+    text(svg, x(ev.t0) - 4, pTop - 8, "t0 " + timeFmt.format(ev.t0) + " UTC", "mark", "end");
+    if (ev.post_time != null) {
+      svgEl("line", { x1: x(ev.post_time), x2: x(ev.post_time), y1: pTop, y2: vBot, stroke: "var(--muted)", "stroke-width": 1 }, svg);
+    }
+
+    // hover layer: the crosshair snaps to the nearest hour and the tooltip lists every series
+    const cross = svgEl("line", { y1: pTop, y2: vBot, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" }, svg);
+    const dot = svgEl("circle", { r: 4, fill: "var(--winner)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg);
+    const hit = svgEl("rect", { x: x0, y: pTop, width: x1 - x0, height: vBot - pTop, fill: "transparent" }, svg);
+
+    function priceAt(i) {
+      for (let j = i; j >= 0; j--) if (ev.price[j] != null) return { value: ev.price[j], traded: j === i };
+      return null;
+    }
+    function show(i) {
+      state.index = i;
+      const t = ev.hours[i];
+      const cx = x(t + HOUR / 2);
+      cross.setAttribute("x1", cx);
+      cross.setAttribute("x2", cx);
+      cross.setAttribute("visibility", "visible");
+      const p = priceAt(i);
+      if (p) {
+        dot.setAttribute("cx", cx);
+        dot.setAttribute("cy", yP(p.value));
+        dot.setAttribute("visibility", "visible");
+      } else {
+        dot.setAttribute("visibility", "hidden");
+      }
+      tip.replaceChildren();
+      htmlEl("div", "head", timeFmt.format(t) + " to " + clockFmt.format(t + HOUR) + " UTC", tip);
+      const rows = [
+        ["line", "var(--winner)", p ? p.value.toFixed(3) : "no trade", ev.winner + " price" + (p && !p.traded ? " (last trade earlier)" : "")],
+        ["line", "var(--winner)", usd(ev.win[i]), "on " + ev.winner],
+        ["line", "var(--loser)", usd(ev.lose[i]), "on " + ev.loser],
+        [null, null, String(ev.trades[i]), "trades"],
+      ];
+      for (const [kind, color, value, name] of rows) {
+        const row = htmlEl("div", "row", null, tip);
+        const key = htmlEl("i", "key-line", null, row);
+        key.style.background = color || "transparent";
+        htmlEl("span", "val", value, row);
+        htmlEl("span", "name", name, row);
+      }
+      tip.style.display = "block";
+      const scale = plot.clientWidth / W;
+      let left = cx * scale + 12;
+      if (left + tip.offsetWidth > plot.clientWidth) left = cx * scale - tip.offsetWidth - 12;
+      tip.style.left = Math.max(0, left) + "px";
+      tip.style.top = (pTop * scale) + "px";
+    }
+    function hide() {
+      cross.setAttribute("visibility", "hidden");
+      dot.setAttribute("visibility", "hidden");
+      tip.style.display = "none";
+    }
+    function indexAt(clientX) {
+      const box = svg.getBoundingClientRect();
+      const px = (clientX - box.left) * W / box.width;
+      const t = ev.start + (px - x0) / (x1 - x0) * (ev.end - ev.start);
+      return Math.max(0, Math.min(ev.hours.length - 1, Math.floor((t - ev.hours[0]) / HOUR)));
+    }
+    hit.addEventListener("pointermove", function (e) { show(indexAt(e.clientX)); });
+    hit.addEventListener("pointerleave", hide);
+    svg.addEventListener("focus", function () {
+      show(state.index != null ? state.index : Math.max(0, ev.hours.findIndex(function (t) { return t >= ev.t0; }) - 1));
+    });
+    svg.addEventListener("blur", hide);
+    svg.addEventListener("keydown", function (e) {
+      const stepBy = { ArrowLeft: -1, ArrowRight: 1, PageUp: -24, PageDown: 24 }[e.key];
+      if (stepBy == null) return;
+      e.preventDefault();
+      show(Math.max(0, Math.min(ev.hours.length - 1, (state.index || 0) + stepBy)));
+    });
+    if (state.index != null && document.activeElement === svg) show(state.index);
+  }
+
+  EVENTS.forEach(buildCard);
+  buildWalletTable();
+})();
+</script>
+</body>
+</html>

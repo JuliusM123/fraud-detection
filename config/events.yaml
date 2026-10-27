@@ -1,0 +1,119 @@
+# Configuration for the Polymarket fraud detection prototype.
+# All times are UTC.
+# Data comes from Goldsky and the Polymarket APIs instead of Dune (see README).
+
+http:
+  # pause between two requests to the same process
+  min_interval_seconds: 0.2
+  max_retries: 5
+  # stop a call series after this many pages of up to 1000 rows
+  max_pages: 300
+
+data:
+  # wallet histories and transfer lists are read up to this many pages of 1000 rows
+  wallet_history_max_pages: 20
+
+# Market used to check data access in Stage 1.
+test_market:
+  condition_id: "0xf82ce6cd43d102b5545be8c107dda25697417a7af42ae277c5c8de0f812ae4fb"
+  question: "US x Iran meeting by March 31, 2026?"
+  start_time: "2026-03-24 00:00:00"
+  end_time: "2026-03-31 00:00:00"
+
+# Fixed before looking at any results (Stages 4 and 5), except where noted.
+thresholds:
+  # 6 hours in the spec. Changed by the user to 12 hours after the first results, because a wallet
+  # described by AP bought 6 to 8.5 hours before the ceasefire post. The 6 hour results are kept in
+  # output/window_6h/.
+  detection_window_hours: 12
+  baseline_days: 7
+  hours_after_t0: 12
+  max_entry_price: 0.5
+  size_percentile: 95
+  fresh_wallet_hours: 48
+  flag_min_score: 4
+  # wallet rating (Stage 6)
+  # a wallet counts as fresh for the rating when its first trade is less than this many hours before
+  # the flagged trade. Changed by the user from 48 to 168 hours after the first results, because the
+  # wallet of the charged Maduro case was about 6 days old. Stage 5 still uses fresh_wallet_hours.
+  rating_fresh_hours: 168
+  few_markets_max: 3
+  repeat_wins_min: 2
+  # a funder with at least this many outgoing ERC20 transfers is a service, not a shared private funder
+  # (added after the first wallet run, see README)
+  service_min_transfers: 1000
+  # event rating (Stage 8): minimum volume z score of the detection window. Set by the user after the
+  # results were known, when the placebo test was removed (see README)
+  event_min_z: 3
+
+# Picked by the user in Stage 2.
+# t0 is the moment the information became public. For iran_ceasefire and tariff_pause
+# that is the Truth Social post. For maduro it is the first public report of the strikes,
+# because the post came more than three hours later (decided by the user).
+# Post times come from the CNN Truth Social archive and were checked against news reports.
+events:
+  - id: iran_ceasefire
+    name: US and Iran two week ceasefire
+    condition_id: "0x4c5701bcde0b8fb7d7f48c8e9d20245a6caa58c61a77f981fad98f2bfa0b1bc7"
+    question: "US x Iran ceasefire by April 7?"
+    winning_outcome: "YES"
+    t0: "2026-04-07 22:32:26"
+    t0_basis: Truth Social post
+    post_time: "2026-04-07 22:32:26"
+    market_start: "2026-03-24 17:55:37"
+    notes: >
+      Rules need confirmation by both governments by April 7, 11:59 PM ET. Polymarket marked the
+      market as disputed for a few days and resolved it YES. Pakistan had asked publicly for a two
+      week extension of the deadline before the post.
+    source_links:
+      t0:
+        - https://truthsocial.com/@realDonaldTrump/116365796713313030
+        - https://ix.cnn.io/data/truth-social/truth_archive.json
+        - https://wtop.com/national/2026/04/newly-created-polymarket-accounts-bet-big-on-us-iran-ceasefire-in-hours-before-trumps-announcement/
+      market:
+        - https://polymarket.com/event/us-x-iran-ceasefire-by/us-x-iran-ceasefire-by-april-7
+
+  - id: maduro
+    name: Maduro removed from power
+    condition_id: "0x580adc1327de9bf7c179ef5aaffa3377bb5cb252b7d6390b027172d43fd6f993"
+    question: "Maduro out by January 31, 2026?"
+    winning_outcome: "YES"
+    t0: "2026-01-03 06:00:00"
+    t0_basis: first public reports of explosions in Caracas, about 02:00 local time (AFP)
+    post_time: "2026-01-03 09:21:19"
+    market_start: "2025-12-12 00:27:56"
+    notes: >
+      Positive control. A US soldier was charged in April 2026 over bets on this market. Reports say
+      the account "Burdensome-Mix" bought YES between 21:00 and 23:30 ET on January 2
+      (02:00 to 04:30 UTC on January 3). US forces reached the compound at 06:01 UTC (Gen. Caine).
+    source_links:
+      t0:
+        - https://elmercurio.com.ec/ultimas-noticias/2026/01/03/reportan-explosiones-en-caracas-venezuela-el-3-de-enero-de-2026/
+        - https://en.wikipedia.org/wiki/2026_United_States_intervention_in_Venezuela
+        - https://www.nbcnews.com/world/latin-america/live-blog/venezuela-explosions-trump-maduro-live-updates-rcna251053
+        - https://truthsocial.com/@realDonaldTrump/115830428767897167
+        - https://abcnews.com/International/explosions-heard-venezuelas-capital-city-caracas/story?id=128861598
+        - https://www.wrvo.org/2026-04-23/u-s-soldier-charged-with-suspected-polymarket-insider-trading-over-maduro-raid
+      market:
+        - https://polymarket.com/event/maduro-out-in-2025/maduro-out-by-january-31-2026-318
+
+  - id: tariff_pause
+    name: 90 day tariff pause
+    condition_id: "0xb7ad06db4383aeccf99329bc835ccd87cb9cde8b1107727e9376a03a99185ac2"
+    question: "Will Trump reduce or pause tariffs on Vietnam before June?"
+    winning_outcome: "YES"
+    t0: "2025-04-09 17:18:40"
+    t0_basis: Truth Social post
+    post_time: "2025-04-09 17:18:40"
+    market_start: "2025-04-03 20:59:23"
+    notes: >
+      Small market (about 244k USD total volume). It opened 5 days 20 hours before t0, so the
+      baseline is shorter than 7 days. The "GREAT TIME TO BUY" post came earlier at 13:37:01 UTC.
+    source_links:
+      t0:
+        - https://truthsocial.com/@realDonaldTrump/114309144289505174
+        - https://truthsocial.com/@realDonaldTrump/114308272725981913
+        - https://www.politifact.com/factchecks/2025/apr/09/donald-trump/flip-flop-trump-pauses-country-tariffs-90-days
+        - https://www.aljazeera.com/economy/2025/4/10/how-trump-flip-flopped-on-pausing-tariffs
+      market:
+        - https://polymarket.com/event/which-countries-will-trump-reduce-tariffs-on-before-june/will-trump-reduce-or-pause-tariffs-on-vietnam-before-june
